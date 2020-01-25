@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="45c15e13-27a2-4b41-8add-0ca229ec64c8" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<file:config name="File_Config" doc:name="File Config" doc:id="ccdf0bfa-e70d-4c00-82bb-71cbbd8274fb" >
+		<file:connection workingDir="C:\Users\Swapna\OneDrive\sales" />
+	</file:config>
+	<jms:config name="JMS_Config" doc:name="JMS Config" doc:id="6ae6b9f0-f43b-4245-9f70-08cedd24e86e" >
+		<jms:active-mq-connection username="admin" password="admin" >
+			<jms:factory-configuration brokerUrl="tcp://localhost:61616" />
+		</jms:active-mq-connection>
+	</jms:config>
+	<flow doc:id="c0ac26f6-a98c-4a2c-b7eb-9ec4648abf8d" name="publish-subscribe-Flow">
+		<http:listener doc:name="Listener" doc:id="c1cbd48c-b348-4317-af2c-b18d9a15358e" config-ref="HTTP_Listener_config" path="/ABCD_info_systems"/>
+		<file:read doc:name="Read_Sales_file" doc:id="147f6bac-1bc8-4dc9-afcf-149c5ed872c4" config-ref="File_Config" path="SalesJan2009.csv"/>
+		<logger level="INFO" doc:name="Display_msg" doc:id="acaefde1-3ef0-4d1a-a9b5-2df57186383a" message="#[payload]"/>
+		<jms:publish doc:name="Publish_the_data" doc:id="15331043-45fe-448e-a841-fa75473befe6" config-ref="JMS_Config" destination="app_queue"/>
+		<jms:consume doc:name="Consume_the_data" doc:id="fae42410-05f4-4050-938c-d0dc2b188d3f" config-ref="JMS_Config" destination="app_queue" contentType="application/json">
+			<jms:consumer-type >
+				<jms:queue-consumer />
+			</jms:consumer-type>
+		</jms:consume>
+		<ee:transform doc:name="Transform Message" doc:id="427fa2a4-340c-4b82-95dc-f3caa90e7fe7" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+using(finalData=payload filter ((item, index) -> item.Price == "120" and (item.Country == "United Kingdom" or item.Country == "Canada" or item.Country == "Spain") and item.Payment_Type == "Mastercard"))
+finalData map ((item, index) -> {
+    Transaction_date: item.Transaction_date,
+    Product: item.Product,
+    Price : item.Price
+})]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="e88e7ca6-2ad5-42c2-b795-c660350f2f9f" />
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="0db768a3-80f4-4a75-8c7d-272a999b64ec" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="23b8bf62-2768-441d-8bb6-7747ac5edd98" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"On error Continue"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	
+</flow>
+</mule>
